@@ -1,0 +1,27 @@
+# Builds and pushes the claude-pr-agent Docker image whenever its source files change.
+# After the pipeline completes, update the image reference in
+# pr-review-pipeline.yml manually with the digest printed at the end of this run.
+#
+# Required Woodpecker secrets (push event):
+#   zot_ci_user / zot_ci_password   — Zot registry push credentials
+
+when:
+  - event: push
+
+steps:
+  build-and-push:
+    image: docker:27-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      ZOT_CI_USER:
+        from_secret: zot_ci_user
+      ZOT_CI_PASSWORD:
+        from_secret: zot_ci_password
+    commands:
+      - TAG=${CI_COMMIT_SHA:0:7}
+      - echo "$ZOT_CI_PASSWORD" | docker login registry.desync.link -u "$ZOT_CI_USER" --password-stdin
+      - docker build -t "registry.desync.link/claude-pr-agent:$TAG" .
+      - PUSH_OUT=$(docker push "registry.desync.link/claude-pr-agent:$TAG")
+      - DIGEST=$(printf '%s' "$PUSH_OUT" | grep -oE 'sha256:[a-f0-9]{64}' | tail -1)
+      - echo "registry.desync.link/claude-pr-agent:$TAG@$DIGEST"
