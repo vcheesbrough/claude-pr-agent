@@ -97,13 +97,13 @@ log "prompt file size: $(wc -c < "$PROMPT_FILE") bytes"
 
 log "running claude (timeout 8m, model: sonnet)"
 set +e
-PROMPT_CONTENT=$(cat "$PROMPT_FILE")
 timeout 8m claude \
-  -p "$PROMPT_CONTENT" \
+  --print \
   --model claude-sonnet-4-6 \
   --allowed-tools "Read,Grep,Glob" \
   --output-format text \
   --dangerously-skip-permissions \
+  < "$PROMPT_FILE" \
   > "$REVIEW_JSON" 2> >(tee /tmp/review.err >&2)
 CLAUDE_RC=$?
 set -e
