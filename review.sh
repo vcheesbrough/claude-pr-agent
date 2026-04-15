@@ -103,7 +103,7 @@ timeout 8m claude \
   --allowed-tools "Read,Grep,Glob" \
   --output-format text \
   --dangerously-skip-permissions \
-  > "$REVIEW_JSON" 2> /tmp/review.err
+  > "$REVIEW_JSON" 2> >(tee /tmp/review.err >&2)
 CLAUDE_RC=$?
 set -e
 
@@ -113,8 +113,6 @@ if [[ $CLAUDE_RC -ne 0 ]] || [[ ! -s "$REVIEW_JSON" ]]; then
   log "claude failed (rc=$CLAUDE_RC) or produced empty output"
   log "stdout (first 500):"
   head -c 500 "$REVIEW_JSON" >&2 || true
-  log "stderr (first 500):"
-  head -c 500 /tmp/review.err >&2 || true
   FAILURE_BODY=$(printf ':warning: **PR review agent failed** — see Woodpecker CI logs for details.\n\nExit code: `%s`' "$CLAUDE_RC")
   if [[ "${REVIEWER_DRY_RUN:-0}" == "1" ]]; then
     printf '%s\n' "$FAILURE_BODY"
