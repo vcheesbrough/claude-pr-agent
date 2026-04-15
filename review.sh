@@ -5,7 +5,7 @@
 # mounted at CI_WORKSPACE with the PR branch checked out.
 #
 # Env (from Woodpecker secrets and built-ins):
-#   ANTHROPIC_API_KEY
+#   CLAUDE_CODE_OAUTH_TOKEN    Claude.ai subscription OAuth token (required)
 #   PR_REVIEWER_GH_APP_ID
 #   PR_REVIEWER_GH_APP_INSTALLATION_ID
 #   PR_REVIEWER_GH_APP_PRIVATE_KEY_B64
@@ -15,6 +15,7 @@
 #   CI_WORKSPACE               Woodpecker workspace path
 #
 # Optional:
+#   ANTHROPIC_API_KEY          API key (takes precedence over CLAUDE_CODE_OAUTH_TOKEN if set)
 #   REVIEWER_DRY_RUN=1         print the review JSON to stdout instead of posting
 
 set -euo pipefail
@@ -29,7 +30,7 @@ if [[ "$(id -u)" -eq 0 ]]; then
   exec gosu reviewer "$0" "$@"
 fi
 
-: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
+: "${CLAUDE_CODE_OAUTH_TOKEN:?CLAUDE_CODE_OAUTH_TOKEN is required}"
 : "${CI_REPO:?CI_REPO is required}"
 : "${CI_COMMIT_PULL_REQUEST:?CI_COMMIT_PULL_REQUEST is required}"
 : "${CI_COMMIT_TARGET_BRANCH:=master}"
