@@ -136,7 +136,8 @@ fi
 # Validate JSON and extract fields
 log "validating review JSON"
 if ! jq -e . "$REVIEW_JSON" > /dev/null 2>&1; then
-  log "claude produced invalid JSON — falling back to top-level comment"
+  log "claude produced invalid JSON — dumping raw output and falling back to top-level comment"
+  cat "$REVIEW_JSON"
   gh pr comment "$CI_COMMIT_PULL_REQUEST" --repo "$CI_REPO" --body-file "$REVIEW_JSON" || true
   exit 1
 fi
