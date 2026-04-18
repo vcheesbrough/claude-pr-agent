@@ -65,8 +65,9 @@ Rules:
 - Do not suggest changes outside the diff unless they are necessary to fix a
   problem in the diff.
 - Do not speculate about runtime behaviour you cannot verify from the code.
-- You may use Read, Grep, and Glob to consult `CLAUDE.md`, existing stacks,
-  and the full files touched by the diff for context. You cannot edit files.
+- The full contents of every changed file are injected into this prompt under
+  the "Full contents of changed files (HEAD)" section. Use that for context —
+  do not call any tools. You cannot edit files.
 - Do not recursively critique your own configuration in
   `devops-stack/pr-reviewer/` or `.woodpecker/pr-review-pipeline.yml` beyond surface-level
   checks (pinning, syntax). Defer deep review of the reviewer to a human.

@@ -17,6 +17,8 @@
 # Optional:
 #   ANTHROPIC_API_KEY          API key (takes precedence over CLAUDE_CODE_OAUTH_TOKEN if set)
 #   REVIEWER_DRY_RUN=1         print the review JSON to stdout instead of posting
+#   MAX_DIFF_BYTES             hard cap on diff size (default 200000)
+#   MAX_FILE_BYTES             hard cap on total injected file content (default 300000)
 
 set -euo pipefail
 
@@ -65,6 +67,42 @@ if (( ${#DIFF} > MAX_DIFF_BYTES )); then
 [... diff truncated at ${MAX_DIFF_BYTES} bytes ...]"
 fi
 
+# Fetch full content of files changed in this PR and inject into the prompt.
+# This eliminates the need for Claude to use Read/Grep/Glob tool calls.
+PR_HEAD_SHA=$(git rev-parse HEAD)
+PR_FILES=$(curl -sf \
+  -H "Authorization: Bearer ${GH_TOKEN}" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/${CI_REPO}/pulls/${CI_COMMIT_PULL_REQUEST}/files?per_page=100") \
+  || PR_FILES="[]"
+CHANGED_FILES=$(printf '%s\n' "$PR_FILES" | jq -r '.[] | select(.status != "removed") | .filename')
+log "changed files: $(printf '%s\n' "$CHANGED_FILES" | grep -c .) non-removed"
+
+MAX_FILE_BYTES=${MAX_FILE_BYTES:-300000}
+INJECTED_FILES=""
+INJECTED_BYTES=0
+
+while IFS= read -r FILE_PATH; do
+  [[ -z "$FILE_PATH" ]] && continue
+  RAW=$(curl -sf \
+    -H "Authorization: Bearer ${GH_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${CI_REPO}/contents/${FILE_PATH}?ref=${PR_HEAD_SHA}" \
+    | jq -r '.content // empty' \
+    | base64 -d 2>/dev/null) || { log "could not fetch ${FILE_PATH} — skipping"; continue; }
+  FILE_BYTES=${#RAW}
+  if (( INJECTED_BYTES + FILE_BYTES > MAX_FILE_BYTES )); then
+    log "file content cap reached (${INJECTED_BYTES} bytes) — omitting ${FILE_PATH} and remainder"
+    INJECTED_FILES+=$'\n'"[... further files omitted — ${MAX_FILE_BYTES}-byte cap reached ...]"
+    break
+  fi
+  INJECTED_FILES+=$'\n\n### `'"${FILE_PATH}"'`\n\n```\n'"${RAW}"$'\n```'
+  INJECTED_BYTES=$(( INJECTED_BYTES + FILE_BYTES ))
+  log "injected ${FILE_PATH} (${FILE_BYTES} bytes, running total ${INJECTED_BYTES})"
+done <<< "$CHANGED_FILES"
+
+log "total injected file content: ${INJECTED_BYTES} bytes"
+
 CLAUDE_MD=""
 if [[ -f CLAUDE.md ]]; then
   CLAUDE_MD=$(cat CLAUDE.md)
@@ -88,6 +126,9 @@ trap 'rm -f "$PROMPT_FILE" "$REVIEW_JSON"' EXIT
   printf -- '- PR:   #%s\n' "$CI_COMMIT_PULL_REQUEST"
   printf -- '- Base: %s\n' "$CI_COMMIT_TARGET_BRANCH"
   printf '\n---\n\n# Diff\n\n```diff\n%s\n```\n' "$DIFF"
+  if [[ -n "$INJECTED_FILES" ]]; then
+    printf '\n---\n\n# Full contents of changed files (HEAD)\n\nProvided so you do not need to use any tools.\n%s\n' "$INJECTED_FILES"
+  fi
 } > "$PROMPT_FILE"
 
 log "running as user: $(id)"
@@ -95,12 +136,12 @@ log "claude path: $(which claude 2>/dev/null || echo NOT FOUND)"
 log "claude version: $(claude --version 2>&1 || echo FAILED)"
 log "prompt file size: $(wc -c < "$PROMPT_FILE") bytes"
 
-log "running claude (timeout 8m, model: sonnet)"
+log "running claude (timeout 90s, model: sonnet, single-turn)"
 set +e
-timeout 8m claude \
+timeout 90s claude \
   --print \
   --model claude-sonnet-4-6 \
-  --allowed-tools "Read,Grep,Glob" \
+  --allowed-tools "" \
   --output-format text \
   --dangerously-skip-permissions \
   < "$PROMPT_FILE" \
