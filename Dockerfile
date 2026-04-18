@@ -23,7 +23,9 @@ RUN pip3 install --break-system-packages --no-cache-dir \
 COPY mint-github-token.py /usr/local/bin/mint-github-token
 COPY review.sh            /usr/local/bin/review
 COPY system-prompt.md     /etc/pr-reviewer/system-prompt.md
-RUN chmod +x /usr/local/bin/mint-github-token /usr/local/bin/review
+# Strip any CRLF that may survive the COPY (Windows checkout, cached layer, etc.)
+RUN sed -i 's/\r$//' /usr/local/bin/review /usr/local/bin/mint-github-token \
+    && chmod +x /usr/local/bin/mint-github-token /usr/local/bin/review
 
 # Claude Code refuses --dangerously-skip-permissions as root.
 RUN useradd -m -s /bin/bash reviewer
