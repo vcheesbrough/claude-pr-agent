@@ -133,6 +133,10 @@ if [[ "${REVIEWER_DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Strip markdown fences if Claude wrapped the JSON in ```json ... ```
+sed -i '1{/^```/d}' "$REVIEW_JSON"
+sed -i '${/^```/d}' "$REVIEW_JSON"
+
 # Validate JSON and extract fields
 log "validating review JSON"
 if ! jq -e . "$REVIEW_JSON" > /dev/null 2>&1; then
