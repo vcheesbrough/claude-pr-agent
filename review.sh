@@ -136,9 +136,12 @@ log "claude path: $(which claude 2>/dev/null || echo NOT FOUND)"
 log "claude version: $(claude --version 2>&1 || echo FAILED)"
 log "prompt file size: $(wc -c < "$PROMPT_FILE") bytes"
 
-log "running claude (timeout 90s, model: sonnet, single-turn)"
+# CLAUDE_TIMEOUT can be set in the Woodpecker step environment to override
+# the default. Large PRs (>200KB injected) routinely need more than 90s.
+CLAUDE_TIMEOUT=${CLAUDE_TIMEOUT:-300}
+log "running claude (timeout ${CLAUDE_TIMEOUT}s, model: sonnet, single-turn)"
 set +e
-timeout 90s claude \
+timeout "${CLAUDE_TIMEOUT}s" claude \
   --print \
   --model claude-sonnet-4-6 \
   --allowed-tools "" \
