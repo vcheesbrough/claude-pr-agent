@@ -40,6 +40,7 @@ fi
 
 log "workspace: $CI_WORKSPACE"
 cd "$CI_WORKSPACE"
+git config --global --add safe.directory "$CI_WORKSPACE"
 
 log "minting GitHub App installation token"
 GH_TOKEN=$(mint-github-token) || die "could not mint GitHub token"
