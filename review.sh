@@ -178,18 +178,26 @@ if [[ "${REVIEWER_DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-# Strip markdown fences if Claude wrapped the JSON in ```json ... ```
-sed -i '1{/^```/d}' "$REVIEW_JSON"
-sed -i '${/^```/d}' "$REVIEW_JSON"
-
-# Validate JSON and extract fields
-log "validating review JSON"
-if ! jq -e . "$REVIEW_JSON" > /dev/null 2>&1; then
+# Extract the JSON object from Claude's output.
+# raw_decode finds the first '{' and parses exactly one JSON object from there,
+# ignoring any leading prose, markdown fences, or trailing text.
+log "extracting review JSON"
+if ! python3 - "$REVIEW_JSON" <<'PYEOF' > /tmp/review_clean.json 2>/dev/null
+import json, sys
+text = open(sys.argv[1]).read()
+s = text.find('{')
+if s < 0:
+    sys.exit(1)
+obj, _ = json.JSONDecoder().raw_decode(text[s:])
+print(json.dumps(obj))
+PYEOF
+then
   log "claude produced invalid JSON — dumping raw output and falling back to top-level comment"
   cat "$REVIEW_JSON"
   gh pr comment "$CI_COMMIT_PULL_REQUEST" --repo "$CI_REPO" --body-file "$REVIEW_JSON" || true
   exit 1
 fi
+mv /tmp/review_clean.json "$REVIEW_JSON"
 
 VERDICT=$(jq -r '.verdict' "$REVIEW_JSON")
 EVENT=$(jq -r '.event' "$REVIEW_JSON")
